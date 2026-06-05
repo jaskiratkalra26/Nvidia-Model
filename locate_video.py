@@ -74,10 +74,11 @@ def _from_legacy_cache(cls, past_key_values=None):
         return past_key_values
     if past_key_values is None:
         return cls()
+    print(f"DEBUG from_legacy_cache: rebuilding {len(past_key_values)} layers", flush=True)
     cache = cls()
-    for layer_past in past_key_values:
-        key_states, value_states = layer_past[:2]
-        cache.update(key_states, value_states, len(cache))
+    for layer_idx, layer_past in enumerate(past_key_values):
+        key_states, value_states = layer_past[0], layer_past[1]
+        cache.update(key_states, value_states, layer_idx)
     return cache
 
 # Force-set both methods unconditionally
@@ -199,7 +200,9 @@ def process_video(input_path, output_path, prompt):
             else:
                 output = outputs[0]
                 if hasattr(output, 'cpu'):
-                    output = output.cpu().tolist()
+                    ids = output.cpu().tolist()
+                    print(f"DEBUG token ids (first 20): {ids[:20]}", flush=True)
+                    output = ids
                 last_text = processor.decode(output, skip_special_tokens=False)
                 
             print(f"Output: {last_text}")
