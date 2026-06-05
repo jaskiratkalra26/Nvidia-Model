@@ -140,7 +140,8 @@ def process_video(input_path, output_path, prompt):
                 inputs['pixel_values'] = inputs['pixel_values'].to(dtype)
                 
             with torch.no_grad():
-                outputs = model.generate(**inputs, max_new_tokens=128)
+                # Generate the bounding boxes/text
+                outputs = model.generate(**inputs, max_new_tokens=128, use_cache=True)
                 
             # Extract the generated text
             last_text = processor.decode(outputs[0], skip_special_tokens=True)
