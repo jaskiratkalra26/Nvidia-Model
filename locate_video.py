@@ -120,8 +120,20 @@ def process_video(input_path, output_path, prompt):
             # Convert OpenCV BGR frame to PIL RGB Image
             pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             
-            # Run inference manually
-            inputs = processor(images=[pil_image], text=prompt, return_tensors="pt").to(device)
+            # Format prompt using the chat template required by LocateAnything
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image"},
+                        {"type": "text", "text": prompt}
+                    ]
+                }
+            ]
+            text_prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            
+            # Run inference
+            inputs = processor(images=[pil_image], text=text_prompt, return_tensors="pt").to(device)
             
             # Ensure images match the model's floating point precision
             if 'pixel_values' in inputs:
