@@ -61,8 +61,12 @@ DynCache = transformers.cache_utils.DynamicCache
 
 def _to_legacy_cache(self):
     legacy_cache = ()
-    for layer in self.layers:
-        legacy_cache += ((layer.keys, layer.values),)
+    for i, layer in enumerate(self.layers):
+        k, v = layer.keys, layer.values
+        if i == 0:
+            kinfo = f"shape={k.shape}" if hasattr(k, 'shape') else f"type={type(k).__name__}"
+            print(f"DEBUG cache layer 0: keys={kinfo}", flush=True)
+        legacy_cache += ((k, v),)
     return legacy_cache
 
 def _from_legacy_cache(cls, past_key_values=None):
