@@ -35,6 +35,19 @@ def patched_init(self, config, *args, **kwargs):
             del self._check_and_adjust_attn_implementation
 
 transformers.modeling_utils.PreTrainedModel.__init__ = patched_init
+
+original_get_expanded = transformers.modeling_utils.PreTrainedModel.get_expanded_tied_weights_keys
+
+@wraps(original_get_expanded)
+def patched_get_expanded(self, *args, **kwargs):
+    try:
+        return original_get_expanded(self, *args, **kwargs)
+    except AttributeError as e:
+        if "'list' object has no attribute 'keys'" in str(e):
+            return getattr(self, "_tied_weights_keys", [])
+        raise
+
+transformers.modeling_utils.PreTrainedModel.get_expanded_tied_weights_keys = patched_get_expanded
 # -------------------------------------------------------------------------------
 
 def parse_bbox(text, width, height):
