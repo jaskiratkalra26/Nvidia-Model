@@ -111,7 +111,7 @@ def parse_bbox(text, width, height):
                 
     return results
 
-def process_video(input_path, output_path, prompt):
+def process_video(input_path, output_path, prompts):
     print("Loading LocateAnything-3B model... This might take a few moments.")
     
     # Automatically use GPU and fp16 precision if available to save VRAM
@@ -178,44 +178,55 @@ def process_video(input_path, output_path, prompt):
             # Convert OpenCV BGR frame to PIL RGB Image
             pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             
-            # Format prompt using the chat template required by LocateAnything
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image"},
-                        {"type": "text", "text": prompt}
-                    ]
-                }
-            ]
-            text_prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            all_boxes = []
+            all_text = []
             
-            # Run inference
-            inputs = processor(images=[pil_image], text=text_prompt, return_tensors="pt").to(device)
-            
-            # Ensure images match the model's floating point precision
-            if 'pixel_values' in inputs:
-                inputs['pixel_values'] = inputs['pixel_values'].to(dtype)
+            for p in prompts:
+                # Format prompt using the chat template required by LocateAnything
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "image"},
+                            {"type": "text", "text": f"Locate the {p}."}
+                        ]
+                    }
+                ]
+                text_prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
                 
-            with torch.no_grad():
-                # Generate the bounding boxes/text
-                outputs = model.generate(**inputs, max_new_tokens=128, use_cache=True, tokenizer=processor.tokenizer)
+                # Run inference
+                inputs = processor(images=[pil_image], text=text_prompt, return_tensors="pt").to(device)
                 
-            # Extract the generated text — handle both string and tensor outputs
-            if isinstance(outputs, str):
-                last_text = outputs
-            elif isinstance(outputs, list) and len(outputs) > 0 and isinstance(outputs[0], str):
-                last_text = outputs[0]
-            else:
-                output = outputs[0]
-                if hasattr(output, 'cpu'):
-                    ids = output.cpu().tolist()
-                    print(f"DEBUG token ids (first 20): {ids[:20]}", flush=True)
-                    output = ids
-                last_text = processor.decode(output, skip_special_tokens=False)
+                # Ensure images match the model's floating point precision
+                if 'pixel_values' in inputs:
+                    inputs['pixel_values'] = inputs['pixel_values'].to(dtype)
+                    
+                with torch.no_grad():
+                    # Generate the bounding boxes/text
+                    outputs = model.generate(**inputs, max_new_tokens=128, use_cache=True, tokenizer=processor.tokenizer)
+                    
+                # Extract the generated text — handle both string and tensor outputs
+                if isinstance(outputs, str):
+                    out_text = outputs
+                elif isinstance(outputs, list) and len(outputs) > 0 and isinstance(outputs[0], str):
+                    out_text = outputs[0]
+                else:
+                    output = outputs[0]
+                    if hasattr(output, 'cpu'):
+                        output = output.cpu().tolist()
+                    out_text = processor.decode(output, skip_special_tokens=False)
+                    
+                print(f"Output for '{p}': {out_text}")
+                all_text.append(out_text)
                 
-            print(f"Output: {last_text}")
-            last_boxes = parse_bbox(last_text, width, height)
+                # Parse boxes and override the label with our exact query for clarity
+                parsed = parse_bbox(out_text, width, height)
+                for item in parsed:
+                    item["label"] = p
+                all_boxes.extend(parsed)
+                
+            last_text = " | ".join(all_text)
+            last_boxes = all_boxes
         else:
             print(f"Skipping inference for frame {frame_count}, reusing previous boxes.")
             
@@ -266,7 +277,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="LocateAnything Video Processing")
     parser.add_argument('--input', type=str, required=True, help='Path to input video')
     parser.add_argument('--output', type=str, default='output_located.mp4', help='Path to output video')
-    parser.add_argument('--prompt', type=str, default='Locate the needle holder, the surgical thread, and the metal cheek retractor.', help='Text prompt for the model to locate')
+    parser.add_argument('--prompts', type=str, nargs='+', default=['metal cheek retractor', 'needle holder', 'surgical thread', 'surgical needle', 'hemostat clamp'], help='List of individual tools to locate')
     args = parser.parse_args()
     
-    process_video(args.input, args.output, args.prompt)
+    process_video(args.input, args.output, args.prompts)
