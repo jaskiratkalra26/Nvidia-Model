@@ -5,6 +5,8 @@ from transformers import AutoProcessor, AutoModel
 import transformers.modeling_utils
 import argparse
 import re
+import os
+import glob
 from functools import wraps
 
 # --- MONKEYPATCH to fix HuggingFace API compatibility with custom remote code ---
@@ -120,11 +122,19 @@ def process_video(input_path, output_path, prompt):
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     
-    # Setup video writer
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    # Setup crash-proof frame saving
+    frames_dir = "output_frames"
+    os.makedirs(frames_dir, exist_ok=True)
     
-    frame_count = 0
+    # Check if we can resume
+    existing_frames = glob.glob(os.path.join(frames_dir, "frame_*.jpg"))
+    start_frame = len(existing_frames)
+    
+    if start_frame > 0:
+        print(f"Found {start_frame} existing frames. Resuming from frame {start_frame + 1}...")
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+    
+    frame_count = start_frame
     last_boxes = []
     last_text = ""
     
@@ -186,10 +196,16 @@ def process_video(input_path, output_path, prompt):
         # Print the raw text output onto the video frame
         cv2.putText(frame, last_text[:100], (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         
-        out.write(frame)
+        # Save frame to disk safely
+        frame_path = os.path.join(frames_dir, f"frame_{frame_count:05d}.jpg")
+        cv2.imwrite(frame_path, frame)
         
     cap.release()
-    out.release()
+    
+    print("\nStitching frames into final MP4 video using FFmpeg...")
+    # Compile the frames into the final video
+    os.system(f"ffmpeg -y -framerate {fps} -i {frames_dir}/frame_%05d.jpg -c:v libx264 -pix_fmt yuv420p {output_path}")
+    
     print(f"\nFinished! Processed video saved to {output_path}")
 
 if __name__ == '__main__':
