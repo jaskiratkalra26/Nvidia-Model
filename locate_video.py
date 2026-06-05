@@ -60,6 +60,9 @@ import transformers.cache_utils
 DynCache = transformers.cache_utils.DynamicCache
 
 def _to_legacy_cache(self):
+    if hasattr(self, 'layers') and self.layers:
+        layer = self.layers[0]
+        print(f"DEBUG: layer type={type(layer).__name__} attrs={[a for a in dir(layer) if not a.startswith('_')]}", flush=True)
     return tuple(self)
 
 def _from_legacy_cache(cls, past_key_values=None):
@@ -182,7 +185,7 @@ def process_video(input_path, output_path, prompt):
                 
             with torch.no_grad():
                 # Generate the bounding boxes/text
-                outputs = model.generate(**inputs, max_new_tokens=128, use_cache=False, tokenizer=processor.tokenizer)
+                outputs = model.generate(**inputs, max_new_tokens=128, use_cache=True, tokenizer=processor.tokenizer)
                 
             # Extract the generated text — handle both string and tensor outputs
             if isinstance(outputs, str):
