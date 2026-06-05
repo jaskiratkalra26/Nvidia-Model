@@ -1,0 +1,7 @@
+transformers
+accelerate
+pillow
+opencv-python
+torch
+torchvision
+torchaudio
