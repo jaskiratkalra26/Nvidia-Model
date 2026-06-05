@@ -1,4 +1,7 @@
-transformers
+# LocateAnything-3B requires transformers==4.51.x
+# - 4.51+ needed for Qwen3Config used in configuration_locateanything.py
+# - 4.52+ breaks DynamicCache API and defaults to 'eager' attention which Nvidia's custom Qwen2 doesn't support
+transformers==4.51.3
 accelerate
 pillow
 opencv-python
