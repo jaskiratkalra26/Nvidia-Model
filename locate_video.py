@@ -55,30 +55,25 @@ transformers.modeling_utils.PreTrainedModel.get_expanded_tied_weights_keys = pat
 
 # Fix for to_legacy_cache / from_legacy_cache being removed in transformers 4.46+
 import transformers.cache_utils
-if hasattr(transformers, "cache_utils") and hasattr(transformers.cache_utils, "DynamicCache"):
-    DynCache = transformers.cache_utils.DynamicCache
-    
-    if not hasattr(DynCache, "to_legacy_cache"):
-        def to_legacy_cache(self):
-            return self
-        DynCache.to_legacy_cache = to_legacy_cache
-    
-    if not hasattr(DynCache, "from_legacy_cache"):
-        @classmethod
-        def from_legacy_cache(cls, past_key_values=None):
-            # If it's already a DynamicCache, just return it
-            if isinstance(past_key_values, cls):
-                return past_key_values
-            # If it's None, return a fresh empty cache
-            if past_key_values is None:
-                return cls()
-            # If it's a legacy tuple-of-tuples, rebuild a DynamicCache from it
-            cache = cls()
-            for layer_past in past_key_values:
-                key_states, value_states = layer_past[:2]
-                cache.update(key_states, value_states, len(cache))
-            return cache
-        DynCache.from_legacy_cache = from_legacy_cache
+DynCache = transformers.cache_utils.DynamicCache
+
+def _to_legacy_cache(self):
+    return self
+
+def _from_legacy_cache(cls, past_key_values=None):
+    if isinstance(past_key_values, DynCache):
+        return past_key_values
+    if past_key_values is None:
+        return cls()
+    cache = cls()
+    for layer_past in past_key_values:
+        key_states, value_states = layer_past[:2]
+        cache.update(key_states, value_states, len(cache))
+    return cache
+
+# Force-set both methods unconditionally
+DynCache.to_legacy_cache = _to_legacy_cache
+DynCache.from_legacy_cache = classmethod(_from_legacy_cache)
 # -------------------------------------------------------------------------------
 
 def parse_bbox(text, width, height):
