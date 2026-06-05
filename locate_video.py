@@ -58,7 +58,9 @@ import transformers.cache_utils
 if hasattr(transformers, "cache_utils") and hasattr(transformers.cache_utils, "DynamicCache"):
     if not hasattr(transformers.cache_utils.DynamicCache, "to_legacy_cache"):
         def to_legacy_cache(self):
-            return (self.key_cache, self.value_cache)
+            # By returning self, we prevent it from degrading into a legacy tuple,
+            # which perfectly satisfies modern transformers' generate() loops!
+            return self
         transformers.cache_utils.DynamicCache.to_legacy_cache = to_legacy_cache
 # -------------------------------------------------------------------------------
 
