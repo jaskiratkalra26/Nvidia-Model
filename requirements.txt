@@ -7,3 +7,4 @@ torchvision
 torchaudio
 decord
 lmdb
+peft
