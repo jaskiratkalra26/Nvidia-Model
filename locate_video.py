@@ -2,8 +2,32 @@ import cv2
 import torch
 from PIL import Image
 from transformers import AutoProcessor, AutoModel
+import transformers.modeling_utils
 import argparse
 import re
+from functools import wraps
+
+# --- MONKEYPATCH to fix HuggingFace API compatibility with custom remote code ---
+original_init = transformers.modeling_utils.PreTrainedModel.__init__
+
+@wraps(original_init)
+def patched_init(self, config, *args, **kwargs):
+    original_method = getattr(self.__class__, "_check_and_adjust_attn_implementation")
+    
+    def wrapper(self_instance, *a, **kw):
+        kw.pop("allow_all_kernels", None)
+        return original_method(self_instance, *a, **kw)
+        
+    # Temporarily bind the wrapper to the instance
+    self._check_and_adjust_attn_implementation = wrapper.__get__(self)
+    try:
+        original_init(self, config, *args, **kwargs)
+    finally:
+        if hasattr(self, "_check_and_adjust_attn_implementation"):
+            del self._check_and_adjust_attn_implementation
+
+transformers.modeling_utils.PreTrainedModel.__init__ = patched_init
+# -------------------------------------------------------------------------------
 
 def parse_bbox(text, width, height):
     """
