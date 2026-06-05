@@ -52,6 +52,14 @@ def patched_get_expanded(self, *args, **kwargs):
         raise
 
 transformers.modeling_utils.PreTrainedModel.get_expanded_tied_weights_keys = patched_get_expanded
+
+# Fix for to_legacy_cache being removed in transformers 4.46+
+import transformers.cache_utils
+if hasattr(transformers, "cache_utils") and hasattr(transformers.cache_utils, "DynamicCache"):
+    if not hasattr(transformers.cache_utils.DynamicCache, "to_legacy_cache"):
+        def to_legacy_cache(self):
+            return (self.key_cache, self.value_cache)
+        transformers.cache_utils.DynamicCache.to_legacy_cache = to_legacy_cache
 # -------------------------------------------------------------------------------
 
 def parse_bbox(text, width, height):
