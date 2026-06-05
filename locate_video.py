@@ -81,11 +81,15 @@ DynCache.from_legacy_cache = classmethod(_from_legacy_cache)
 def parse_bbox(text, width, height):
     """
     Attempt to parse grounding bounding boxes from the model's text output.
-    Assuming the model outputs coordinates in a normalized [0, 1000] format like [x1, y1, x2, y2].
+    LocateAnything uses <box><x1><y1><x2><y2></box> format in [0, 1000] scale.
     """
     boxes = []
-    # Matches patterns like [120, 340, 500, 600]
-    matches = re.findall(r'\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]', text)
+    # Match <box><x1><y1><x2><y2></box>
+    matches = re.findall(r'<box><(\d+)><(\d+)><(\d+)><(\d+)></box>', text)
+    if not matches:
+        # Fallback for standard Qwen-VL formats like [120, 340, 500, 600]
+        matches = re.findall(r'\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]', text)
+        
     for m in matches:
         x1, y1, x2, y2 = map(int, m)
         # Normalize from 1000-scale to image pixels
@@ -147,12 +151,12 @@ def process_video(input_path, output_path, prompt):
         
         # Stop processing after 30 seconds of video
         if frame_count > fps * 30:
-            print(f"Reached 30 seconds of video. Stopping early.")
+            print(f"Reached 30 seconds of video. Stopping early.", flush=True)
             break
             
         # Only run the heavy inference every 3rd frame (or the very first frame)
         if frame_count % 3 == 1:
-            print(f"Processing frame {frame_count} with LocateAnything...")
+            print(f"Processing frame {frame_count} with LocateAnything...", flush=True)
             
             # Convert OpenCV BGR frame to PIL RGB Image
             pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
@@ -181,13 +185,15 @@ def process_video(input_path, output_path, prompt):
                 outputs = model.generate(**inputs, max_new_tokens=128, use_cache=True, tokenizer=processor.tokenizer)
                 
             # Extract the generated text — handle both string and tensor outputs
-            output = outputs[0]
-            if isinstance(output, str):
-                last_text = output
+            if isinstance(outputs, str):
+                last_text = outputs
+            elif isinstance(outputs, list) and len(outputs) > 0 and isinstance(outputs[0], str):
+                last_text = outputs[0]
             else:
+                output = outputs[0]
                 if hasattr(output, 'cpu'):
                     output = output.cpu().tolist()
-                last_text = processor.decode(output, skip_special_tokens=True)
+                last_text = processor.decode(output, skip_special_tokens=False)
                 
             print(f"Output: {last_text}")
             last_boxes = parse_bbox(last_text, width, height)
