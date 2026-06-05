@@ -182,7 +182,7 @@ def process_video(input_path, output_path, prompt):
                 
             with torch.no_grad():
                 # Generate the bounding boxes/text
-                outputs = model.generate(**inputs, max_new_tokens=128, use_cache=True, tokenizer=processor.tokenizer)
+                outputs = model.generate(**inputs, max_new_tokens=128, use_cache=False, tokenizer=processor.tokenizer)
                 
             # Extract the generated text — handle both string and tensor outputs
             if isinstance(outputs, str):
