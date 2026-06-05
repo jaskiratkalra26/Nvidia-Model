@@ -33,6 +33,10 @@ def patched_init(self, config, *args, **kwargs):
     finally:
         if hasattr(self, "_check_and_adjust_attn_implementation"):
             del self._check_and_adjust_attn_implementation
+            
+    # Fix for missing all_tied_weights_keys if custom model didn't call post_init()
+    if not hasattr(self, "all_tied_weights_keys"):
+        self.all_tied_weights_keys = {}
 
 transformers.modeling_utils.PreTrainedModel.__init__ = patched_init
 
