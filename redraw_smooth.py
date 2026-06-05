@@ -26,6 +26,25 @@ def parse_bbox(text, width, height):
                 results.append({"label": label.strip(), "box": (px1, py1, px2, py2)})
     return results
 
+def calculate_overlap_ratio(box1, box2):
+    x1_1, y1_1, x2_1, y2_1 = box1
+    x1_2, y1_2, x2_2, y2_2 = box2
+    
+    xi1 = max(x1_1, x1_2)
+    yi1 = max(y1_1, y1_2)
+    xi2 = min(x2_1, x2_2)
+    yi2 = min(y2_1, y2_2)
+    
+    inter_area = max(0, xi2 - xi1) * max(0, yi2 - yi1)
+    if inter_area == 0:
+        return 0.0
+        
+    box1_area = max(1, (x2_1 - x1_1) * (y2_1 - y1_1))
+    box2_area = max(1, (x2_2 - x1_2) * (y2_2 - y1_2))
+    
+    # Calculate what percentage of the smaller box is inside the larger box
+    return inter_area / float(min(box1_area, box2_area))
+
 def redraw_smooth():
     input_video = "surgery_video.mp4"
     log_file = "processing.log"
@@ -96,6 +115,28 @@ def redraw_smooth():
             break
             
         raw_boxes = frame_to_raw_boxes.get(frame_idx, {})
+        
+        # --- OVERLAP FILTER (NMS) ---
+        # If two boxes overlap by more than 70%, the AI is confused and drew boxes on top of each other.
+        # We keep the smaller, tighter box and delete the bigger one.
+        filtered_boxes = {}
+        for label1, box1 in raw_boxes.items():
+            keep = True
+            for label2, box2 in list(filtered_boxes.items()):
+                if calculate_overlap_ratio(box1, box2) > 0.7:
+                    box1_area = (box1[2]-box1[0])*(box1[3]-box1[1])
+                    box2_area = (box2[2]-box2[0])*(box2[3]-box2[1])
+                    if box1_area < box2_area:
+                        # Replace the old bigger box with this new tighter one
+                        del filtered_boxes[label2]
+                        keep = True
+                    else:
+                        keep = False
+                    break
+            if keep:
+                filtered_boxes[label1] = box1
+                
+        raw_boxes = filtered_boxes
         current_labels = set(raw_boxes.keys())
         
         # Apply EMA Math

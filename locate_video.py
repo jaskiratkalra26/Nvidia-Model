@@ -189,7 +189,7 @@ def process_video(input_path, output_path, prompts):
                         "role": "user",
                         "content": [
                             {"type": "image"},
-                            {"type": "text", "text": f"Locate the {p}."}
+                            {"type": "text", "text": f"Locate the {p}. If it is not clearly visible in this frame, output <box>None</box>."}
                         ]
                     }
                 ]
