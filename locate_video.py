@@ -1,7 +1,7 @@
 import cv2
 import torch
 from PIL import Image
-from transformers import pipeline
+from transformers import AutoProcessor, AutoModel
 import argparse
 import re
 
@@ -31,13 +31,14 @@ def process_video(input_path, output_path, prompt):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.float16 if torch.cuda.is_available() else torch.float32
     
-    pipe = pipeline(
-        "image-text-to-text", 
-        model="nvidia/LocateAnything-3B", 
+    model_id = "nvidia/LocateAnything-3B"
+    processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+    model = AutoModel.from_pretrained(
+        model_id, 
         trust_remote_code=True, 
-        device=device,
         torch_dtype=dtype
-    )
+    ).to(device)
+    model.eval()
     
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
@@ -70,24 +71,18 @@ def process_video(input_path, output_path, prompt):
             # Convert OpenCV BGR frame to PIL RGB Image
             pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "image": pil_image},
-                        {"type": "text", "text": prompt}
-                    ]
-                },
-            ]
+            # Run inference manually
+            inputs = processor(images=pil_image, text=prompt, return_tensors="pt").to(device)
             
-            # Run inference
-            outputs = pipe(text=messages)
-            
+            # Ensure images match the model's floating point precision
+            if 'pixel_values' in inputs:
+                inputs['pixel_values'] = inputs['pixel_values'].to(dtype)
+                
+            with torch.no_grad():
+                outputs = model.generate(**inputs, max_new_tokens=128)
+                
             # Extract the generated text
-            if isinstance(outputs, list) and len(outputs) > 0 and 'generated_text' in outputs[0]:
-                last_text = outputs[0]['generated_text']
-            else:
-                last_text = str(outputs)
+            last_text = processor.decode(outputs[0], skip_special_tokens=True)
                 
             print(f"Output: {last_text}")
             last_boxes = parse_bbox(last_text, width, height)
