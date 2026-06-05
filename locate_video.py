@@ -53,15 +53,32 @@ def patched_get_expanded(self, *args, **kwargs):
 
 transformers.modeling_utils.PreTrainedModel.get_expanded_tied_weights_keys = patched_get_expanded
 
-# Fix for to_legacy_cache being removed in transformers 4.46+
+# Fix for to_legacy_cache / from_legacy_cache being removed in transformers 4.46+
 import transformers.cache_utils
 if hasattr(transformers, "cache_utils") and hasattr(transformers.cache_utils, "DynamicCache"):
-    if not hasattr(transformers.cache_utils.DynamicCache, "to_legacy_cache"):
+    DynCache = transformers.cache_utils.DynamicCache
+    
+    if not hasattr(DynCache, "to_legacy_cache"):
         def to_legacy_cache(self):
-            # By returning self, we prevent it from degrading into a legacy tuple,
-            # which perfectly satisfies modern transformers' generate() loops!
             return self
-        transformers.cache_utils.DynamicCache.to_legacy_cache = to_legacy_cache
+        DynCache.to_legacy_cache = to_legacy_cache
+    
+    if not hasattr(DynCache, "from_legacy_cache"):
+        @classmethod
+        def from_legacy_cache(cls, past_key_values=None):
+            # If it's already a DynamicCache, just return it
+            if isinstance(past_key_values, cls):
+                return past_key_values
+            # If it's None, return a fresh empty cache
+            if past_key_values is None:
+                return cls()
+            # If it's a legacy tuple-of-tuples, rebuild a DynamicCache from it
+            cache = cls()
+            for layer_past in past_key_values:
+                key_states, value_states = layer_past[:2]
+                cache.update(key_states, value_states, len(cache))
+            return cache
+        DynCache.from_legacy_cache = from_legacy_cache
 # -------------------------------------------------------------------------------
 
 def parse_bbox(text, width, height):
