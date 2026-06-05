@@ -182,14 +182,14 @@ def process_video(input_path, output_path, prompts):
             all_boxes = []
             all_text = []
             
-            for p in prompts:
+            for label, desc in prompts.items():
                 # Format prompt using the chat template required by LocateAnything
                 messages = [
                     {
                         "role": "user",
                         "content": [
                             {"type": "image"},
-                            {"type": "text", "text": f"Locate the {p}. If it is not clearly visible in this frame, output <box>None</box>."}
+                            {"type": "text", "text": f"Locate {desc}. If it is not clearly visible in this frame, output <box>None</box>."}
                         ]
                     }
                 ]
@@ -217,13 +217,13 @@ def process_video(input_path, output_path, prompts):
                         output = output.cpu().tolist()
                     out_text = processor.decode(output, skip_special_tokens=False)
                     
-                print(f"Output for '{p}': {out_text}")
+                print(f"Output for '{label}': {out_text}")
                 all_text.append(out_text)
                 
                 # Parse boxes and override the label with our exact query for clarity
                 parsed = parse_bbox(out_text, width, height)
                 for item in parsed:
-                    item["label"] = p
+                    item["label"] = label
                 all_boxes.extend(parsed)
                 
             last_text = " | ".join(all_text)
@@ -277,7 +277,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="LocateAnything Video Processing")
     parser.add_argument('--input', type=str, required=True, help='Path to input video')
     parser.add_argument('--output', type=str, default='output_located.mp4', help='Path to output video')
-    parser.add_argument('--prompts', type=str, nargs='+', default=['metal cheek retractor', 'needle holder', 'surgical thread', 'surgical needle', 'hemostat clamp'], help='List of individual tools to locate')
     args = parser.parse_args()
     
-    process_video(args.input, args.output, args.prompts)
+    process_video(args.input, args.output)
