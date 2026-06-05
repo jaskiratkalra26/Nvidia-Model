@@ -224,11 +224,28 @@ def process_video(input_path, output_path, prompt):
         
     cap.release()
     
-    print("\nStitching frames into final MP4 video using FFmpeg...")
-    # Compile the frames into the final video
-    os.system(f"ffmpeg -y -framerate {fps} -i {frames_dir}/frame_%05d.jpg -c:v libx264 -pix_fmt yuv420p {output_path}")
+    print("\nStitching frames into final MP4 video...", flush=True)
+    # Try ffmpeg first, fall back to OpenCV if not installed
+    ffmpeg_result = os.system(f"ffmpeg -y -framerate {fps} -i {frames_dir}/frame_%05d.jpg -c:v libx264 -pix_fmt yuv420p {output_path}")
     
-    print(f"\nFinished! Processed video saved to {output_path}")
+    if ffmpeg_result != 0:
+        print("FFmpeg not found, installing and retrying...", flush=True)
+        os.system("sudo apt-get install -y ffmpeg")
+        ffmpeg_result = os.system(f"ffmpeg -y -framerate {fps} -i {frames_dir}/frame_%05d.jpg -c:v libx264 -pix_fmt yuv420p {output_path}")
+    
+    if ffmpeg_result != 0:
+        print("FFmpeg failed. Falling back to OpenCV stitcher...", flush=True)
+        frame_files = sorted(glob.glob(os.path.join(frames_dir, "frame_*.jpg")))
+        if frame_files:
+            sample = cv2.imread(frame_files[0])
+            h, w = sample.shape[:2]
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            writer = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+            for f in frame_files:
+                writer.write(cv2.imread(f))
+            writer.release()
+    
+    print(f"\nFinished! Processed video saved to {output_path}", flush=True)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="LocateAnything Video Processing")
