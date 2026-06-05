@@ -120,6 +120,12 @@ def process_video(input_path, output_path, prompt):
     ).to(device)
     model.eval()
     
+    # Nvidia's custom Qwen2 doesn't support 'eager' attention - force sdpa on all submodules
+    for module in model.modules():
+        if getattr(module, '_attn_implementation', None) == 'eager':
+            module._attn_implementation = 'sdpa'
+    print("Attention implementation forced to sdpa.", flush=True)
+    
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
         print(f"Error: Could not open video {input_path}")
