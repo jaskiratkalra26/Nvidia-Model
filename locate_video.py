@@ -60,10 +60,10 @@ import transformers.cache_utils
 DynCache = transformers.cache_utils.DynamicCache
 
 def _to_legacy_cache(self):
-    if hasattr(self, 'layers') and self.layers:
-        layer = self.layers[0]
-        print(f"DEBUG: layer type={type(layer).__name__} attrs={[a for a in dir(layer) if not a.startswith('_')]}", flush=True)
-    return tuple(self)
+    legacy_cache = ()
+    for layer in self.layers:
+        legacy_cache += ((layer.keys, layer.values),)
+    return legacy_cache
 
 def _from_legacy_cache(cls, past_key_values=None):
     if isinstance(past_key_values, DynCache):
