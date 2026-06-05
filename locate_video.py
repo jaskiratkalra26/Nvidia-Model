@@ -121,7 +121,7 @@ def process_video(input_path, output_path, prompt):
             pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             
             # Run inference manually
-            inputs = processor(images=pil_image, text=prompt, return_tensors="pt").to(device)
+            inputs = processor(images=[pil_image], text=prompt, return_tensors="pt").to(device)
             
             # Ensure images match the model's floating point precision
             if 'pixel_values' in inputs:
