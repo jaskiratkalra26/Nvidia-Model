@@ -165,11 +165,14 @@ def process_video(input_path, output_path, prompt):
                 # Generate the bounding boxes/text
                 outputs = model.generate(**inputs, max_new_tokens=128, use_cache=True, tokenizer=processor.tokenizer)
                 
-            # Extract the generated text
-            output_ids = outputs[0]
-            if hasattr(output_ids, 'cpu'):
-                output_ids = output_ids.cpu().tolist()
-            last_text = processor.decode(output_ids, skip_special_tokens=True)
+            # Extract the generated text — handle both string and tensor outputs
+            output = outputs[0]
+            if isinstance(output, str):
+                last_text = output
+            else:
+                if hasattr(output, 'cpu'):
+                    output = output.cpu().tolist()
+                last_text = processor.decode(output, skip_special_tokens=True)
                 
             print(f"Output: {last_text}")
             last_boxes = parse_bbox(last_text, width, height)
