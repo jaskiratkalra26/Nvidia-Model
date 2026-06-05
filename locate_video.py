@@ -53,45 +53,53 @@ def process_video(input_path, output_path, prompt):
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
     
     frame_count = 0
+    last_boxes = []
+    last_text = ""
+    
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
             
         frame_count += 1
-        print(f"Processing frame {frame_count}...")
         
-        # Convert OpenCV BGR frame to PIL RGB Image
-        pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": pil_image},
-                    {"type": "text", "text": prompt}
-                ]
-            },
-        ]
-        
-        # Run inference on the single frame
-        outputs = pipe(text=messages)
-        
-        # Extract the generated text
-        if isinstance(outputs, list) and len(outputs) > 0 and 'generated_text' in outputs[0]:
-            generated_text = outputs[0]['generated_text']
-        else:
-            generated_text = str(outputs)
+        # Only run the heavy inference every 3rd frame (or the very first frame)
+        if frame_count % 3 == 1:
+            print(f"Processing frame {frame_count} with LocateAnything...")
             
-        print(f"Output: {generated_text}")
-        
-        # Attempt to draw boxes if the text contains coordinates
-        boxes = parse_bbox(generated_text, width, height)
-        for (x1, y1, x2, y2) in boxes:
+            # Convert OpenCV BGR frame to PIL RGB Image
+            pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image", "image": pil_image},
+                        {"type": "text", "text": prompt}
+                    ]
+                },
+            ]
+            
+            # Run inference
+            outputs = pipe(text=messages)
+            
+            # Extract the generated text
+            if isinstance(outputs, list) and len(outputs) > 0 and 'generated_text' in outputs[0]:
+                last_text = outputs[0]['generated_text']
+            else:
+                last_text = str(outputs)
+                
+            print(f"Output: {last_text}")
+            last_boxes = parse_bbox(last_text, width, height)
+        else:
+            print(f"Skipping inference for frame {frame_count}, reusing previous boxes.")
+            
+        # Draw the cached (or newly generated) boxes
+        for (x1, y1, x2, y2) in last_boxes:
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 3)
             
-        # Also print the raw text output onto the top left of the video frame
-        cv2.putText(frame, generated_text[:100], (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        # Print the raw text output onto the video frame
+        cv2.putText(frame, last_text[:100], (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         
         out.write(frame)
         
