@@ -166,7 +166,10 @@ def process_video(input_path, output_path, prompt):
                 outputs = model.generate(**inputs, max_new_tokens=128, use_cache=True, tokenizer=processor.tokenizer)
                 
             # Extract the generated text
-            last_text = processor.decode(outputs[0], skip_special_tokens=True)
+            output_ids = outputs[0]
+            if hasattr(output_ids, 'cpu'):
+                output_ids = output_ids.cpu().tolist()
+            last_text = processor.decode(output_ids, skip_special_tokens=True)
                 
             print(f"Output: {last_text}")
             last_boxes = parse_bbox(last_text, width, height)
