@@ -42,48 +42,42 @@ def patched_init(self, config, *args, **kwargs):
 
 transformers.modeling_utils.PreTrainedModel.__init__ = patched_init
 
-original_get_expanded = transformers.modeling_utils.PreTrainedModel.get_expanded_tied_weights_keys
+# Only patch get_expanded_tied_weights_keys if it exists (newer transformers)
+if hasattr(transformers.modeling_utils.PreTrainedModel, 'get_expanded_tied_weights_keys'):
+    original_get_expanded = transformers.modeling_utils.PreTrainedModel.get_expanded_tied_weights_keys
+    @wraps(original_get_expanded)
+    def patched_get_expanded(self, *args, **kwargs):
+        try:
+            return original_get_expanded(self, *args, **kwargs)
+        except AttributeError as e:
+            if "'list' object has no attribute 'keys'" in str(e):
+                return getattr(self, "_tied_weights_keys", [])
+            raise
+    transformers.modeling_utils.PreTrainedModel.get_expanded_tied_weights_keys = patched_get_expanded
 
-@wraps(original_get_expanded)
-def patched_get_expanded(self, *args, **kwargs):
-    try:
-        return original_get_expanded(self, *args, **kwargs)
-    except AttributeError as e:
-        if "'list' object has no attribute 'keys'" in str(e):
-            return getattr(self, "_tied_weights_keys", [])
-        raise
-
-transformers.modeling_utils.PreTrainedModel.get_expanded_tied_weights_keys = patched_get_expanded
-
-# Fix for to_legacy_cache / from_legacy_cache being removed in transformers 4.46+
+# Only patch DynamicCache if to_legacy_cache is missing (newer transformers removed it)
 import transformers.cache_utils
 DynCache = transformers.cache_utils.DynamicCache
+if not hasattr(DynCache, 'to_legacy_cache'):
+    def _to_legacy_cache(self):
+        legacy_cache = ()
+        for i, layer in enumerate(self.layers):
+            k, v = layer.keys, layer.values
+            legacy_cache += ((k, v),)
+        return legacy_cache
 
-def _to_legacy_cache(self):
-    legacy_cache = ()
-    for i, layer in enumerate(self.layers):
-        k, v = layer.keys, layer.values
-        if i == 0:
-            kinfo = f"shape={k.shape}" if hasattr(k, 'shape') else f"type={type(k).__name__}"
-            print(f"DEBUG cache layer 0: keys={kinfo}", flush=True)
-        legacy_cache += ((k, v),)
-    return legacy_cache
+    def _from_legacy_cache(cls, past_key_values=None):
+        if isinstance(past_key_values, DynCache):
+            return past_key_values
+        if past_key_values is None:
+            return cls()
+        cache = cls()
+        for layer_idx, layer_past in enumerate(past_key_values):
+            cache.update(layer_past[0], layer_past[1], layer_idx)
+        return cache
 
-def _from_legacy_cache(cls, past_key_values=None):
-    if isinstance(past_key_values, DynCache):
-        return past_key_values
-    if past_key_values is None:
-        return cls()
-    print(f"DEBUG from_legacy_cache: rebuilding {len(past_key_values)} layers", flush=True)
-    cache = cls()
-    for layer_idx, layer_past in enumerate(past_key_values):
-        key_states, value_states = layer_past[0], layer_past[1]
-        cache.update(key_states, value_states, layer_idx)
-    return cache
-
-# Force-set both methods unconditionally
-DynCache.to_legacy_cache = _to_legacy_cache
-DynCache.from_legacy_cache = classmethod(_from_legacy_cache)
+    DynCache.to_legacy_cache = _to_legacy_cache
+    DynCache.from_legacy_cache = classmethod(_from_legacy_cache)
 # -------------------------------------------------------------------------------
 
 def parse_bbox(text, width, height):
