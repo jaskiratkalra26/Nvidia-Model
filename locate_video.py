@@ -60,10 +60,7 @@ import transformers.cache_utils
 DynCache = transformers.cache_utils.DynamicCache
 
 def _to_legacy_cache(self):
-    legacy_cache = ()
-    for layer_idx in range(len(self.key_cache)):
-        legacy_cache += ((self.key_cache[layer_idx], self.value_cache[layer_idx]),)
-    return legacy_cache
+    return tuple(self)
 
 def _from_legacy_cache(cls, past_key_values=None):
     if isinstance(past_key_values, DynCache):
