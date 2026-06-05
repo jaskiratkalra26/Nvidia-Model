@@ -241,8 +241,7 @@ def process_video(input_path, output_path, prompts):
             cv2.rectangle(frame, (x1, max(0, y1 - th - 10)), (x1 + tw, y1), (0, 255, 0), -1)
             cv2.putText(frame, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
             
-        # Print the raw text output onto the video frame
-        cv2.putText(frame, last_text[:100], (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        # Red debug text removed to keep video clean
         
         # Save frame to disk safely
         frame_path = os.path.join(frames_dir, f"frame_{frame_count:05d}.jpg")
