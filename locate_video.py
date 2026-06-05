@@ -217,7 +217,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="LocateAnything Video Processing")
     parser.add_argument('--input', type=str, required=True, help='Path to input video')
     parser.add_argument('--output', type=str, default='output_located.mp4', help='Path to output video')
-    parser.add_argument('--prompt', type=str, default='Locate the gloved hand, the needle holder, the surgical thread, and the metal cheek retractor.', help='Text prompt for the model to locate')
+    parser.add_argument('--prompt', type=str, default='Locate the needle holder, the surgical thread, and the metal cheek retractor.', help='Text prompt for the model to locate')
     args = parser.parse_args()
     
     process_video(args.input, args.output, args.prompt)
