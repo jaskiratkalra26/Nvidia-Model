@@ -115,7 +115,8 @@ def process_video(input_path, output_path, prompt):
     model = AutoModel.from_pretrained(
         model_id, 
         trust_remote_code=True, 
-        torch_dtype=dtype
+        torch_dtype=dtype,
+        attn_implementation="sdpa"
     ).to(device)
     model.eval()
     
