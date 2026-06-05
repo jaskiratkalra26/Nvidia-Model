@@ -12,14 +12,22 @@ original_init = transformers.modeling_utils.PreTrainedModel.__init__
 
 @wraps(original_init)
 def patched_init(self, config, *args, **kwargs):
-    original_method = getattr(self.__class__, "_check_and_adjust_attn_implementation")
+    # Fix missing rope_theta in config which causes Qwen2 to crash
+    if not hasattr(config, "rope_theta"):
+        config.rope_theta = 1000000.0
+    if hasattr(config, "text_config") and not hasattr(config.text_config, "rope_theta"):
+        config.text_config.rope_theta = 1000000.0
+
+    original_method = getattr(self.__class__, "_check_and_adjust_attn_implementation", None)
     
-    def wrapper(self_instance, *a, **kw):
-        kw.pop("allow_all_kernels", None)
-        return original_method(self_instance, *a, **kw)
+    if original_method:
+        def wrapper(self_instance, *a, **kw):
+            kw.pop("allow_all_kernels", None)
+            return original_method(self_instance, *a, **kw)
+            
+        # Temporarily bind the wrapper to the instance
+        self._check_and_adjust_attn_implementation = wrapper.__get__(self)
         
-    # Temporarily bind the wrapper to the instance
-    self._check_and_adjust_attn_implementation = wrapper.__get__(self)
     try:
         original_init(self, config, *args, **kwargs)
     finally:
