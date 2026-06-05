@@ -145,6 +145,11 @@ def process_video(input_path, output_path, prompt):
             
         frame_count += 1
         
+        # Stop processing after 30 seconds of video
+        if frame_count > fps * 30:
+            print(f"Reached 30 seconds of video. Stopping early.")
+            break
+            
         # Only run the heavy inference every 3rd frame (or the very first frame)
         if frame_count % 3 == 1:
             print(f"Processing frame {frame_count} with LocateAnything...")
@@ -209,10 +214,10 @@ def process_video(input_path, output_path, prompt):
     print(f"\nFinished! Processed video saved to {output_path}")
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="LocateAnything Video Processing")
     parser.add_argument('--input', type=str, required=True, help='Path to input video')
     parser.add_argument('--output', type=str, default='output_located.mp4', help='Path to output video')
-    parser.add_argument('--prompt', type=str, default='Locate the needle holder, the cheek retractor, and the forceps.', help='Text prompt for the model to locate')
+    parser.add_argument('--prompt', type=str, default='Locate the gloved hand, the needle holder, the surgical thread, and the metal cheek retractor.', help='Text prompt for the model to locate')
     args = parser.parse_args()
     
     process_video(args.input, args.output, args.prompt)
