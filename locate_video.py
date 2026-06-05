@@ -82,26 +82,34 @@ if not hasattr(DynCache, 'to_legacy_cache'):
 
 def parse_bbox(text, width, height):
     """
-    Attempt to parse grounding bounding boxes from the model's text output.
-    LocateAnything uses <box><x1><y1><x2><y2></box> format in [0, 1000] scale.
+    Attempt to parse grounding bounding boxes and their labels from the model's text output.
+    Format: <ref>label</ref><box><x1><y1><x2><y2></box>
     """
-    boxes = []
-    # Match <box><x1><y1><x2><y2></box>
-    matches = re.findall(r'<box><(\d+)><(\d+)><(\d+)><(\d+)></box>', text)
-    if not matches:
-        # Fallback for standard Qwen-VL formats like [120, 340, 500, 600]
-        matches = re.findall(r'\[\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]', text)
+    results = []
+    
+    parts = text.split('<ref>')
+    for part in parts[1:]:
+        if '</ref>' not in part:
+            continue
+        label, rest = part.split('</ref>', 1)
         
-    for m in matches:
-        x1, y1, x2, y2 = map(int, m)
-        # Normalize from 1000-scale to image pixels
-        if x1 <= 1000 and y1 <= 1000 and x2 <= 1000 and y2 <= 1000:
-            x1 = int((x1 / 1000.0) * width)
-            y1 = int((y1 / 1000.0) * height)
-            x2 = int((x2 / 1000.0) * width)
-            y2 = int((y2 / 1000.0) * height)
-            boxes.append((x1, y1, x2, y2))
-    return boxes
+        matches = re.findall(r'<box><(\d+)><(\d+)><(\d+)><(\d+)></box>', rest)
+        for m in matches:
+            x1, y1, x2, y2 = map(int, m)
+            
+            # Ignore boxes that are exactly full-frame (meaning the model failed to pinpoint)
+            if x1 == 0 and y1 == 0 and x2 >= 990 and y2 >= 990:
+                continue
+                
+            if x1 <= 1000 and y1 <= 1000 and x2 <= 1000 and y2 <= 1000:
+                # Normalize from 1000-scale to image pixels
+                px1 = int((x1 / 1000.0) * width)
+                py1 = int((y1 / 1000.0) * height)
+                px2 = int((x2 / 1000.0) * width)
+                py2 = int((y2 / 1000.0) * height)
+                results.append({"label": label.strip(), "box": (px1, py1, px2, py2)})
+                
+    return results
 
 def process_video(input_path, output_path, prompt):
     print("Loading LocateAnything-3B model... This might take a few moments.")
@@ -212,8 +220,15 @@ def process_video(input_path, output_path, prompt):
             print(f"Skipping inference for frame {frame_count}, reusing previous boxes.")
             
         # Draw the cached (or newly generated) boxes
-        for (x1, y1, x2, y2) in last_boxes:
+        for item in last_boxes:
+            x1, y1, x2, y2 = item["box"]
+            label = item["label"]
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 3)
+            
+            # Draw label background and text
+            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+            cv2.rectangle(frame, (x1, max(0, y1 - th - 10)), (x1 + tw, y1), (0, 255, 0), -1)
+            cv2.putText(frame, label, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
             
         # Print the raw text output onto the video frame
         cv2.putText(frame, last_text[:100], (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
