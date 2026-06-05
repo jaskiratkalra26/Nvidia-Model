@@ -97,8 +97,9 @@ def parse_bbox(text, width, height):
         for m in matches:
             x1, y1, x2, y2 = map(int, m)
             
-            # Ignore boxes that are exactly full-frame (meaning the model failed to pinpoint)
-            if x1 == 0 and y1 == 0 and x2 >= 990 and y2 >= 990:
+            # Filter out giant boxes that cover the whole hand/screen (>35% of frame)
+            # The coordinates are on a 1000x1000 scale, so max area is 1,000,000.
+            if (x2 - x1) * (y2 - y1) > 350000:
                 continue
                 
             if x1 <= 1000 and y1 <= 1000 and x2 <= 1000 and y2 <= 1000:
